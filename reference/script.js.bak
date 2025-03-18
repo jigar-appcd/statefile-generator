@@ -1,0 +1,3316 @@
+// generate_aws_state.js
+const fs = require('fs');
+const zlib = require('zlib');
+const crypto = require('crypto');
+
+class AWSStateGenerator {
+    constructor() {
+        this.accountId = "180217099948";
+        this.regions = ["us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1", "ap-northeast-1"];
+        this.azs = {
+            "us-east-1": ["us-east-1a", "us-east-1b", "us-east-1c"],
+            "us-west-2": ["us-west-2a", "us-west-2b", "us-west-2c"],
+            "eu-west-1": ["eu-west-1a", "eu-west-1b", "eu-west-1c"],
+            "ap-southeast-1": ["ap-southeast-1a", "ap-southeast-1b", "ap-southeast-1c"],
+            "ap-northeast-1": ["ap-northeast-1a", "ap-northeast-1b", "ap-northeast-1c"]
+        };
+        this.vpcCountPerRegion = 20;
+        this.resourceCount = 0;
+        this.instanceTypes = [
+            "t3.micro", "t3.small", "t3.medium", "t3.large",
+            "m5.large", "m5.xlarge", "m5.2xlarge",
+            "c5.large", "c5.xlarge", "c5.2xlarge",
+            "r5.large", "r5.xlarge", "r5.2xlarge"
+        ];
+        this.dbInstanceTypes = ["db.t3.micro", "db.t3.small", "db.t3.medium", "db.r5.large"];
+        this.ecsTaskSizes = ["MICRO", "SMALL", "MEDIUM", "LARGE", "XLARGE"];
+        this.elasticacheTypes = ["cache.t3.micro", "cache.t3.small", "cache.m5.large"];
+        this.eksSizes = ["small", "medium", "large"];
+        this.dynamoDBTables = ["users", "orders", "products", "events", "logs"];
+        this.apiGatewayStages = ["dev", "staging", "prod"];
+        this.sqsQueueTypes = ["standard", "fifo"];
+        this.kinesisShardCounts = [1, 2, 4, 8];
+        this.cloudFrontPriceClasses = ["PriceClass_100", "PriceClass_200", "PriceClass_All"];
+        this.glueJobTypes = ["python", "spark", "streaming"];
+        this.sagemakerInstanceTypes = ["ml.t3.medium", "ml.m5.large", "ml.p3.2xlarge"];
+        this.eventBridgeRuleSchedules = ["rate(5 minutes)", "rate(1 hour)", "cron(0 12 * * ? *)"];
+        this.snsPrices = ["Basic", "Standard", "FIFO"];
+        this.wafLimits = ["100", "1000", "10000"];
+        this.route53RecordTypes = ["A", "AAAA", "CNAME", "MX", "TXT"];
+        this.opensearchVersions = ["OpenSearch_2.5", "OpenSearch_2.3", "OpenSearch_1.3"];
+        this.stepFunctionTypes = ["STANDARD", "EXPRESS"];
+        this.neptuneInstanceTypes = ["db.r6g.large", "db.r6g.xlarge", "db.r6g.2xlarge"];
+        this.mskInstanceTypes = ["kafka.t3.small", "kafka.m5.large", "kafka.m5.xlarge"];
+        this.route53Domains = ["example.com", "company.io", "service.net", "app.dev"];
+        this.glueWorkflowSchedules = ["cron(0 12 * * ? *)", "cron(0 0/6 * * ? *)", "cron(0 0 * * ? *)"];
+        this.sagemakerModelNames = ["bert", "resnet", "yolo", "gpt"];
+        this.backupVaultNames = ["critical", "standard", "archive"];
+        this.secretsManagerPrefixes = ["app", "db", "api", "service"];
+        this.athenaWorkgroupNames = ["primary", "reporting", "analytics"];
+        this.emrReleaseLabels = ["emr-6.10.0", "emr-6.9.0", "emr-6.8.0"];
+        this.transferServerProtocols = ["SFTP", "FTP", "FTPS"];
+        this.appSyncAuthTypes = ["API_KEY", "AWS_IAM", "AMAZON_COGNITO_USER_POOLS"];
+        this.codeBuildComputeTypes = ["BUILD_GENERAL1_SMALL", "BUILD_GENERAL1_MEDIUM", "BUILD_GENERAL1_LARGE"];
+        this.codeBuildImages = ["aws/codebuild/amazonlinux2-x86_64-standard:4.0", "aws/codebuild/standard:5.0"];
+        this.mediaConvertPresets = ["System-Generic_Hd_Mp4_Avc_Aac", "System-Generic_Sd_Mp4_Avc_Aac"];
+        this.iotRuleActions = ["lambda", "sns", "sqs", "dynamodb"];
+        this.quickSightEditions = ["STANDARD", "ENTERPRISE"];
+        this.redshiftNodeTypes = ["dc2.large", "ra3.xlplus", "ra3.4xlarge"];
+        this.workspacesComputeTypes = ["STANDARD", "PERFORMANCE", "POWER", "POWERPRO"];
+        this.serviceCatalogProductTypes = ["CLOUD_FORMATION_TEMPLATE", "MARKETPLACE"];
+        this.dataSyncLocationTypes = ["s3", "efs", "fsx"];
+        this.fsxTypes = ["WINDOWS", "LUSTRE", "ONTAP"];
+        this.gameLiftFleetTypes = ["ON_DEMAND", "SPOT"];
+        this.memoryDBNodeTypes = ["db.t4g.small", "db.t4g.medium", "db.r6g.large"];
+        this.mwaaEnvironmentTypes = ["mw2.small", "mw2.medium", "mw2.large"];
+        this.quickSightAnalysisTypes = ["DASHBOARD", "ANALYSIS", "DATASET"];
+        this.xrayGroupTypes = ["FILTER_EXPRESSION", "INSIGHTS"];
+        this.appRunnerRuntimes = ["PYTHON_3", "NODEJS_16", "JAVA_17"];
+        this.emrServerlessRuntimes = ["SPARK-3.3", "HIVE-3.1", "PRESTO-3.2"];
+        this.batchComputeEnvs = ["FARGATE", "EC2", "SPOT"];
+        this.documentDBEngineVersions = ["4.0.0", "5.0.0"];
+        this.transcoderPresets = ["System preset: Generic 1080p", "System preset: Generic 720p"];
+        this.kendraEditions = ["DEVELOPER_EDITION", "ENTERPRISE_EDITION"];
+        this.mediaPackageChannelTypes = ["HLS", "DASH", "CMAF"];
+        this.transferFamilyEndpointTypes = ["PUBLIC", "VPC", "VPC_ENDPOINT"];
+        this.xrayGroupPatterns = [
+            "service(\"api-gateway\")",
+            "service(\"lambda\")",
+            "fault = true"
+        ];
+        this.elasticTranscoderPresets = ["System preset: HLS 2M", "System preset: Web 720p"];
+        this.quickSightDataSources = ["AURORA", "REDSHIFT", "S3"];
+        this.amplifyFrameworks = ["React", "Vue", "Angular"];
+        this.acmCertTypes = ["AMAZON_ISSUED", "IMPORTED"];
+        this.directoryServiceTypes = ["SimpleAD", "MicrosoftAD"];
+        this.globalAcceleratorTypes = ["STANDARD", "CUSTOM"];
+        this.locationTrackers = ["WiFi", "Cell", "IP"];
+        this.managedBlockchainFrameworks = ["HYPERLEDGER_FABRIC", "ETHEREUM"];
+        this.acmValidationMethods = ["DNS", "EMAIL"];
+        this.directoryTypes = ["MicrosoftAD", "SimpleAD"];
+        this.globalAcceleratorProtocols = ["TCP", "UDP"];
+        this.locationGeofenceCollections = ["store-locations", "delivery-zones", "service-areas"];
+        this.qldbLedgerPermissionModes = ["ALLOW_ALL", "STANDARD"];
+        this.vpcLatticeServiceNetworkProtocols = ["http", "http2"];
+        this.privateCaKeyAlgorithms = ["RSA_2048", "RSA_4096", "EC_prime256v1"];
+        this.systemsManagerDocumentTypes = ["Command", "Policy", "Automation"];
+        this.privateCaKeyTypes = ["RSA_2048", "RSA_4096", "EC_PRIME256V1"];
+        this.systemsManagerPatchBaselines = ["WINDOWS", "AMAZON_LINUX_2", "UBUNTU"];
+        this.serviceCatalogPortfolioTypes = ["CLOUD_FORMATION", "MARKETPLACE", "CUSTOM"];
+        this.athenaEngineVersions = ["Athena Engine 3.0", "Athena Engine 2.0"];
+        this.timeStreamDatabases = ["metrics", "logs", "events"];
+        this.managedGrafanaWorkspaces = ["CURRENT", "LITE"];
+        this.comprehendClassifiers = ["sentiment", "entity", "key_phrases"];
+        this.rekognitionCollections = ["faces", "labels", "text"];
+        this.comprehendEndpointTypes = ["SENTIMENT", "ENTITY_RECOGNITION", "KEY_PHRASES"];
+        this.rekognitionModelTypes = ["FACE_DETECTION", "LABELS", "TEXT_DETECTION"];
+        this.lexBotTypes = ["BOT", "BOT_ALIAS", "BOT_CHANNEL"];
+        this.forecastDatasetTypes = ["TARGET_TIME_SERIES", "RELATED_TIME_SERIES", "ITEM_METADATA"];
+        this.fraudDetectorModels = ["ONLINE_FRAUD_INSIGHTS", "TRANSACTION_FRAUD_INSIGHTS"];
+        this.healthLakeDatastoreTypes = ["FHIR_R4", "FHIR_STU3"];
+        this.lookoutMetricsTypes = ["CONTINUOUS", "BACKTEST"];
+        this.personalizeDatasetTypes = ["INTERACTIONS", "ITEMS", "USERS"];
+        this.fraudDetectorModelTypes = ["ONLINE_FRAUD", "TRANSACTION_FRAUD", "ACCOUNT_TAKEOVER"];
+        this.healthLakeFormats = ["FHIR_R4", "HL7_V2", "CCDA"];
+        this.lookoutMetricsFrequencies = ["PT5M", "PT10M", "PT1H"];
+        this.personalizeRecipeTypes = ["aws-hrnn", "aws-personalized-ranking", "aws-sims"];
+        this.connectInstanceTypes = ["STANDARD", "BASIC"];
+        this.guardDutyDetectorSeverities = ["LOW", "MEDIUM", "HIGH"];
+        this.macieSeverities = ["LOW", "MEDIUM", "HIGH"];
+        this.securityHubStandards = ["CIS", "PCI_DSS", "AWS_FOUNDATIONAL"];
+        this.networkFirewallPolicies = ["STATEFUL", "STATELESS"];
+        this.shieldProtectionLayers = ["STANDARD", "ADVANCED"];
+        this.wafIPSetTypes = ["IPV4", "IPV6"];
+        this.managedBlockchainNetworkTypes = ["HYPERLEDGER_FABRIC", "ETHEREUM"];
+        this.mediaLiveChannelTypes = ["STANDARD", "SINGLE_PIPELINE"];
+        this.iotThingTypes = ["DEVICE", "GATEWAY", "SENSOR"];
+        this.ramResourceTypes = ["ec2:Subnet", "ec2:TransitGateway", "license-manager:LicenseConfiguration"];
+        this.serviceCatalogConstraintTypes = ["LAUNCH", "TEMPLATE", "STACKSET"];
+        this.ramSharingTypes = ["RESOURCE", "PORTFOLIO", "IMAGE"];
+        this.serviceCatalogTagOptions = ["Environment", "CostCenter", "Team"];
+        this.elemental5GTypes = ["LINK", "GATEWAY", "NETWORK"];
+        this.inspectorAssessmentTypes = ["NETWORK", "HOST", "PACKAGE"];
+        this.licenseManagerTypes = ["BYOL", "ENTERPRISE", "USAGE"];
+        this.mgmtPortalTypes = ["OPERATIONS", "BILLING", "SECURITY"];
+        this.nimbleStudioTypes = ["STANDARD", "ADVANCED", "ENTERPRISE"];
+        this.protonEnvironmentTypes = ["PRODUCTION", "STAGING", "DEVELOPMENT"];
+
+        // Add new service configurations
+        this.bedrockModels = ["anthropic.claude-v2", "amazon.titan-text", "ai21.j2-ultra"];
+        this.textractFeatures = ["TABLES", "FORMS", "QUERIES"];
+        this.pollyEngines = ["neural", "standard"];
+        this.transcribeLanguages = ["en-US", "es-US", "fr-FR"];
+        this.openSearchServerlessTypes = ["SEARCH", "TIME_SERIES"];
+        this.redshiftServerlessWorkgroups = ["analytics", "reporting", "datascience"];
+        this.lakeFormationPermissions = ["SELECT", "INSERT", "DELETE"];
+        this.glueDataBrewRecipes = ["NORMALIZE", "PIVOT", "FILTER"];
+        this.cleanRoomsTypes = ["STANDARD", "CUSTOM"];
+        this.amazonMQEngines = ["ACTIVEMQ", "RABBITMQ"];
+        this.appFlowConnectors = ["Salesforce", "ServiceNow", "Zendesk"];
+        this.appMeshProtocols = ["http", "http2", "grpc"];
+        this.lightsailBlueprints = ["LAMP", "WordPress", "NodeJS"];
+
+        // Add OpenSearch Serverless configurations
+        this.openSearchServerlessCollectionTypes = ["TIMESERIES", "SEARCH", "VECTORSEARCH"];
+        this.openSearchServerlessCapacityUnits = [2, 4, 8, 16];
+        this.openSearchServerlessRetention = ["1d", "7d", "30d", "90d"];
+
+        // Add new service configurations
+        this.redshiftServerlessWorkgroupTypes = ["DEV", "PROD", "ANALYTICS"];
+        this.lakeFormationDataLakeSettings = ["BASIC", "ADVANCED"];
+        this.glueDataBrewJobTypes = ["PROFILE", "RECIPE"];
+        this.cleanRoomCollaborationTypes = ["BILATERAL", "MULTILATERAL"];
+        this.eventBridgePipeTargets = ["SQS", "LAMBDA", "EVENTBRIDGE"];
+        this.eventBridgeScheduleTypes = ["RATE", "CRON"];
+        this.migrationHubStrategies = ["REHOST", "REPLATFORM", "REFACTOR"];
+        this.auroraServerlessScalingConfigs = ["1-8", "2-16", "4-32"];
+        this.rdsBlueGreenModes = ["STANDARD", "MANAGED"];
+        this.s3ObjectLambdaFormats = ["JSON", "CSV", "PARQUET"];
+        this.backupVaultLockModes = ["GOVERNANCE", "COMPLIANCE"];
+        this.storageGatewayTypes = ["FILE", "VOLUME", "TAPE"];
+        this.iamIdentityCenterTypes = ["USER", "GROUP", "PERMISSION_SET"];
+        this.networkAccessTypes = ["INTERNET", "VPC", "DIRECT_CONNECT"];
+        this.secretsRotationSchedules = ["7_DAYS", "30_DAYS", "60_DAYS"];
+
+        // Add new service configurations
+        this.lakeFormationDataTypes = ["TABLE", "DATABASE", "LOCATION"];
+        this.glueDataBrewRulesets = ["STANDARDIZE", "VALIDATE", "TRANSFORM"];
+        this.cleanRoomMembershipTypes = ["OWNER", "MEMBER"];
+        this.eventBridgePipeStates = ["RUNNING", "STOPPED", "FAILED"];
+        this.migrationHubRefactorSpaces = ["JAVA", "DOTNET", "PYTHON"];
+        this.auroraServerlessEndpoints = ["READER", "WRITER"];
+        this.rdsProxyTargets = ["CURRENT", "STATIC"];
+        this.s3ObjectLambdaActions = ["GET", "HEAD", "LIST"];
+        this.backupVaultNotifications = ["BACKUP_JOB", "RESTORE_JOB", "COPY_JOB"];
+        this.storageGatewayVolumes = ["CACHED", "STORED"];
+    }
+
+    generateId (prefix, index, region) {
+        const uniqueHash = crypto.createHash('sha256')
+            .update(`${prefix}-${region}-${index}-${Date.now()}`)
+            .digest('hex')
+            .substring(0, 8);
+        return `${prefix}-${uniqueHash}`;
+    }
+
+    generateArn (region, service, resourceType, resourceId) {
+        return `arn:aws:${service}:${region}:${this.accountId}:${resourceType}/${resourceId}`;
+    }
+
+    generateVpc (region, vpcIndex) {
+        const vpcId = this.generateId('vpc', vpcIndex, region);
+        const cidrBlock = `10.${vpcIndex}.0.0/16`;
+
+        return {
+            mode: "managed",
+            type: "aws_vpc",
+            name: `vpc_${vpcIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 1,
+                attributes: {
+                    arn: this.generateArn(region, "ec2", "vpc", vpcId),
+                    id: vpcId,
+                    cidr_block: cidrBlock,
+                    enable_dns_hostnames: true,
+                    enable_dns_support: true,
+                    instance_tenancy: "default",
+                    tags: {
+                        Name: `vpc-${region}-${vpcIndex}`,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateSubnet (region, vpcId, subnetIndex, isPublic) {
+        const subnetId = this.generateId('subnet', subnetIndex, region);
+        const az = this.azs[region][subnetIndex % this.azs[region].length];
+        const cidrBlock = `10.${Math.floor(subnetIndex / 2)}.${isPublic ? 0 : 128}.0/24`;
+
+        return {
+            mode: "managed",
+            type: "aws_subnet",
+            name: `subnet_${subnetIndex}_${isPublic ? 'public' : 'private'}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 1,
+                attributes: {
+                    arn: this.generateArn(region, "ec2", "subnet", subnetId),
+                    id: subnetId,
+                    vpc_id: vpcId,
+                    cidr_block: cidrBlock,
+                    availability_zone: az,
+                    map_public_ip_on_launch: isPublic,
+                    tags: {
+                        Name: `subnet-${region}-${subnetIndex}-${isPublic ? 'public' : 'private'}`,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateEC2Instance (region, subnetId, vpcId, instanceIndex) {
+        const instanceId = this.generateId('i', instanceIndex, region);
+        const instanceType = this.instanceTypes[instanceIndex % this.instanceTypes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_instance",
+            name: `instance_${instanceIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 1,
+                attributes: {
+                    arn: this.generateArn(region, "ec2", "instance", instanceId),
+                    id: instanceId,
+                    instance_type: instanceType,
+                    subnet_id: subnetId,
+                    vpc_security_group_ids: [this.generateId('sg', instanceIndex, region)],
+                    ami: "ami-0c55b159cbfafe1f0",
+                    ebs_optimized: true,
+                    monitoring: true,
+                    root_block_device: [{
+                        volume_size: 50,
+                        volume_type: "gp3",
+                        encrypted: true
+                    }],
+                    tags: {
+                        Name: `instance-${region}-${instanceIndex}`,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateRDSInstance (region, subnetIds, vpcId, instanceIndex) {
+        const dbInstanceId = this.generateId('db', instanceIndex, region);
+        const dbInstanceType = this.dbInstanceTypes[instanceIndex % this.dbInstanceTypes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_db_instance",
+            name: `rds_${instanceIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 1,
+                attributes: {
+                    arn: this.generateArn(region, "rds", "db", dbInstanceId),
+                    id: dbInstanceId,
+                    identifier: `rds-${region}-${instanceIndex}`,
+                    instance_class: dbInstanceType,
+                    allocated_storage: 20,
+                    max_allocated_storage: 100,
+                    engine: "postgres",
+                    engine_version: "13.7",
+                    username: "admin",
+                    port: 5432,
+                    db_subnet_group_name: this.generateId('subnet-group', instanceIndex, region),
+                    vpc_security_group_ids: [this.generateId('sg', instanceIndex, region)],
+                    multi_az: true,
+                    backup_retention_period: 7,
+                    backup_window: "03:00-04:00",
+                    maintenance_window: "Mon:04:00-Mon:05:00",
+                    storage_encrypted: true,
+                    tags: {
+                        Name: `rds-${region}-${instanceIndex}`,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateS3Bucket (region, bucketIndex) {
+        const bucketName = `my-bucket-${region}-${bucketIndex}-${crypto.randomBytes(4).toString('hex')}`;
+
+        return {
+            mode: "managed",
+            type: "aws_s3_bucket",
+            name: `bucket_${bucketIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    arn: this.generateArn(region, "s3", "", bucketName),
+                    id: bucketName,
+                    bucket: bucketName,
+                    versioning: {
+                        enabled: true
+                    },
+                    server_side_encryption_configuration: {
+                        rule: {
+                            apply_server_side_encryption_by_default: {
+                                sse_algorithm: "AES256"
+                            }
+                        }
+                    },
+                    tags: {
+                        Name: bucketName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateLambdaFunction (region, vpcId, subnetIds, functionIndex) {
+        const functionName = `lambda-${region}-${functionIndex}`;
+        const roleArn = this.generateArn(region, "iam", "role", `lambda-role-${functionIndex}`);
+
+        return {
+            mode: "managed",
+            type: "aws_lambda_function",
+            name: `function_${functionIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    arn: this.generateArn(region, "lambda", "function", functionName),
+                    id: functionName,
+                    filename: "lambda.zip",
+                    function_name: functionName,
+                    role: roleArn,
+                    handler: "index.handler",
+                    runtime: "nodejs18.x",
+                    memory_size: 128,
+                    timeout: 30,
+                    vpc_config: {
+                        subnet_ids: subnetIds,
+                        security_group_ids: [this.generateId('sg', functionIndex, region)]
+                    },
+                    environment: {
+                        variables: {
+                            ENV: "production"
+                        }
+                    },
+                    tags: {
+                        Name: functionName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateElasticacheCluster (region, subnetIds, vpcId, clusterIndex) {
+        const clusterId = this.generateId('ec', clusterIndex, region);
+        const nodeType = this.elasticacheTypes[clusterIndex % this.elasticacheTypes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_elasticache_cluster",
+            name: `elasticache_${clusterIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    cluster_id: clusterId,
+                    engine: "redis",
+                    node_type: nodeType,
+                    num_cache_nodes: 1,
+                    parameter_group_name: "default.redis6.x",
+                    port: 6379,
+                    subnet_group_name: this.generateId('subnet-group', clusterIndex, region),
+                    security_group_ids: [this.generateId('sg', clusterIndex, region)],
+                    tags: {
+                        Name: `elasticache-${region}-${clusterIndex}`,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateECSCluster (region, clusterIndex) {
+        const clusterName = `ecs-cluster-${region}-${clusterIndex}`;
+
+        return {
+            mode: "managed",
+            type: "aws_ecs_cluster",
+            name: `ecs_cluster_${clusterIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: clusterName,
+                    tags: {
+                        Name: clusterName,
+                        Environment: "production"
+                    },
+                    setting: [{
+                        name: "containerInsights",
+                        value: "enabled"
+                    }]
+                }
+            }]
+        };
+    }
+
+    generateDynamoDBTable (region, tableIndex) {
+        const tableName = this.dynamoDBTables[tableIndex % this.dynamoDBTables.length];
+
+        return {
+            mode: "managed",
+            type: "aws_dynamodb_table",
+            name: `dynamodb_${tableIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 1,
+                attributes: {
+                    name: `${tableName}-${region}-${tableIndex}`,
+                    billing_mode: "PAY_PER_REQUEST",
+                    hash_key: "id",
+                    attribute: [{
+                        name: "id",
+                        type: "S"
+                    }],
+                    tags: {
+                        Name: `${tableName}-${region}-${tableIndex}`,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateEKSCluster (region, vpcId, subnetIds, clusterIndex) {
+        const clusterName = `eks-${region}-${clusterIndex}`;
+
+        return {
+            mode: "managed",
+            type: "aws_eks_cluster",
+            name: `eks_${clusterIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: clusterName,
+                    role_arn: this.generateArn(region, "iam", "role", `eks-role-${clusterIndex}`),
+                    version: "1.27",
+                    vpc_config: [{
+                        subnet_ids: subnetIds,
+                        security_group_ids: [this.generateId('sg', clusterIndex, region)]
+                    }],
+                    tags: {
+                        Name: clusterName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateAPIGateway (region, apiIndex) {
+        const apiName = `api-${region}-${apiIndex}`;
+        return {
+            mode: "managed",
+            type: "aws_api_gateway_rest_api",
+            name: `api_${apiIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: apiName,
+                    description: "Generated API Gateway",
+                    endpoint_configuration: [{
+                        types: ["REGIONAL"]
+                    }],
+                    tags: {
+                        Name: apiName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateSQSQueue (region, queueIndex) {
+        const isFifo = queueIndex % 2 === 0;
+        const queueName = `queue-${region}-${queueIndex}${isFifo ? '.fifo' : ''}`;
+
+        return {
+            mode: "managed",
+            type: "aws_sqs_queue",
+            name: `queue_${queueIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: queueName,
+                    fifo_queue: isFifo,
+                    delay_seconds: 0,
+                    max_message_size: 262144,
+                    message_retention_seconds: 345600,
+                    visibility_timeout_seconds: 30,
+                    tags: {
+                        Name: queueName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateKinesisStream (region, streamIndex) {
+        const streamName = `stream-${region}-${streamIndex}`;
+        const shardCount = this.kinesisShardCounts[streamIndex % this.kinesisShardCounts.length];
+
+        return {
+            mode: "managed",
+            type: "aws_kinesis_stream",
+            name: `stream_${streamIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 1,
+                attributes: {
+                    name: streamName,
+                    shard_count: shardCount,
+                    retention_period: 24,
+                    encryption_type: "KMS",
+                    tags: {
+                        Name: streamName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateCloudFrontDistribution (region, distributionIndex) {
+        const originId = this.generateId('origin', distributionIndex, region);
+        const priceClass = this.cloudFrontPriceClasses[distributionIndex % this.cloudFrontPriceClasses.length];
+
+        return {
+            mode: "managed",
+            type: "aws_cloudfront_distribution",
+            name: `distribution_${distributionIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 1,
+                attributes: {
+                    enabled: true,
+                    price_class: priceClass,
+                    default_cache_behavior: [{
+                        target_origin_id: originId,
+                        viewer_protocol_policy: "redirect-to-https",
+                        allowed_methods: ["GET", "HEAD", "OPTIONS"],
+                        cached_methods: ["GET", "HEAD"],
+                        forwarded_values: [{
+                            query_string: false,
+                            cookies: [{
+                                forward: "none"
+                            }]
+                        }]
+                    }],
+                    tags: {
+                        Name: `distribution-${region}-${distributionIndex}`,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateEventBridgeRule (region, ruleIndex) {
+        const ruleName = `rule-${region}-${ruleIndex}`;
+        const schedule = this.eventBridgeRuleSchedules[ruleIndex % this.eventBridgeRuleSchedules.length];
+
+        return {
+            mode: "managed",
+            type: "aws_cloudwatch_event_rule",
+            name: `rule_${ruleIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: ruleName,
+                    description: "Scheduled EventBridge rule",
+                    schedule_expression: schedule,
+                    is_enabled: true,
+                    tags: {
+                        Name: ruleName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateSNSTopic (region, topicIndex) {
+        const isFifo = topicIndex % 3 === 2;
+        const topicName = `topic-${region}-${topicIndex}${isFifo ? '.fifo' : ''}`;
+
+        return {
+            mode: "managed",
+            type: "aws_sns_topic",
+            name: `topic_${topicIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: topicName,
+                    fifo_topic: isFifo,
+                    content_based_deduplication: isFifo,
+                    kms_master_key_id: "alias/aws/sns",
+                    tags: {
+                        Name: topicName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateWAFWebACL (region, aclIndex) {
+        const aclName = `waf-acl-${region}-${aclIndex}`;
+        const limit = this.wafLimits[aclIndex % this.wafLimits.length];
+
+        return {
+            mode: "managed",
+            type: "aws_wafv2_web_acl",
+            name: `waf_${aclIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: aclName,
+                    description: "WAF Web ACL with rate limiting",
+                    scope: "REGIONAL",
+                    default_action: [{
+                        allow: [{}]
+                    }],
+                    rule: [{
+                        name: "rate-limit",
+                        priority: 1,
+                        action: [{
+                            block: [{}]
+                        }],
+                        statement: [{
+                            rate_based_statement: [{
+                                limit: parseInt(limit),
+                                aggregate_key_type: "IP"
+                            }]
+                        }],
+                        visibility_config: [{
+                            cloudwatch_metrics_enabled: true,
+                            metric_name: `waf-rate-limit-${aclIndex}`,
+                            sampled_requests_enabled: true
+                        }]
+                    }],
+                    tags: {
+                        Name: aclName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateOpenSearchDomain (region, vpcId, subnetIds, domainIndex) {
+        const domainName = `search-${region}-${domainIndex}`;
+        const version = this.opensearchVersions[domainIndex % this.opensearchVersions.length];
+
+        return {
+            mode: "managed",
+            type: "aws_opensearch_domain",
+            name: `search_${domainIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 1,
+                attributes: {
+                    domain_name: domainName,
+                    engine_version: version,
+                    cluster_config: [{
+                        instance_type: "r6g.large.search",
+                        instance_count: 3,
+                        zone_awareness_enabled: true,
+                        zone_awareness_config: [{
+                            availability_zone_count: 3
+                        }]
+                    }],
+                    vpc_options: [{
+                        subnet_ids: subnetIds.slice(0, 3),
+                        security_group_ids: [this.generateId('sg', domainIndex, region)]
+                    }],
+                    ebs_options: [{
+                        ebs_enabled: true,
+                        volume_size: 100,
+                        volume_type: "gp3"
+                    }],
+                    encrypt_at_rest: [{
+                        enabled: true
+                    }],
+                    tags: {
+                        Name: domainName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateStepFunction (region, sfIndex) {
+        const sfName = `workflow-${region}-${sfIndex}`;
+        const type = this.stepFunctionTypes[sfIndex % this.stepFunctionTypes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_sfn_state_machine",
+            name: `workflow_${sfIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: sfName,
+                    role_arn: this.generateArn(region, "iam", "role", `sfn-role-${sfIndex}`),
+                    type: type,
+                    definition: JSON.stringify({
+                        StartAt: "FirstState",
+                        States: {
+                            FirstState: {
+                                Type: "Pass",
+                                End: true
+                            }
+                        }
+                    }),
+                    tags: {
+                        Name: sfName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateNeptuneCluster (region, vpcId, subnetIds, clusterIndex) {
+        const clusterName = `neptune-${region}-${clusterIndex}`;
+        const instanceType = this.neptuneInstanceTypes[clusterIndex % this.neptuneInstanceTypes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_neptune_cluster",
+            name: `neptune_${clusterIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    cluster_identifier: clusterName,
+                    engine: "neptune",
+                    engine_version: "1.2.1.0",
+                    instance_class: instanceType,
+                    neptune_subnet_group_name: this.generateId('subnet-group', clusterIndex, region),
+                    vpc_security_group_ids: [this.generateId('sg', clusterIndex, region)],
+                    storage_encrypted: true,
+                    backup_retention_period: 7,
+                    preferred_backup_window: "03:00-04:00",
+                    skip_final_snapshot: true,
+                    tags: {
+                        Name: clusterName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateMSKCluster (region, vpcId, subnetIds, clusterIndex) {
+        const clusterName = `msk-${region}-${clusterIndex}`;
+        const instanceType = this.mskInstanceTypes[clusterIndex % this.mskInstanceTypes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_msk_cluster",
+            name: `msk_${clusterIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    cluster_name: clusterName,
+                    kafka_version: "3.4.0",
+                    number_of_broker_nodes: 3,
+                    broker_node_group_info: [{
+                        instance_type: instanceType,
+                        client_subnets: subnetIds.slice(0, 3),
+                        security_groups: [this.generateId('sg', clusterIndex, region)],
+                        storage_info: [{
+                            ebs_storage_info: [{
+                                volume_size: 100
+                            }]
+                        }]
+                    }],
+                    encryption_info: [{
+                        encryption_in_transit: [{
+                            client_broker: "TLS",
+                            in_cluster: true
+                        }]
+                    }],
+                    tags: {
+                        Name: clusterName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateRoute53Record (region, zoneIndex, recordIndex) {
+        const domain = this.route53Domains[zoneIndex % this.route53Domains.length];
+        const recordType = this.route53RecordTypes[recordIndex % this.route53RecordTypes.length];
+        const recordName = `service-${recordIndex}.${domain}`;
+
+        return {
+            mode: "managed",
+            type: "aws_route53_record",
+            name: `record_${zoneIndex}_${recordIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    zone_id: this.generateId('zone', zoneIndex, region),
+                    name: recordName,
+                    type: recordType,
+                    ttl: 300,
+                    records: recordType === "A" ? ["10.0.0.1"] :
+                        recordType === "CNAME" ? [`server.${domain}`] :
+                            ["v=spf1 include:_spf.example.com ~all"],
+                    tags: {
+                        Name: recordName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateGlueJob (region, jobIndex) {
+        const jobName = `etl-job-${region}-${jobIndex}`;
+        const jobType = this.glueJobTypes[jobIndex % this.glueJobTypes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_glue_job",
+            name: `glue_job_${jobIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: jobName,
+                    role_arn: this.generateArn(region, "iam", "role", `glue-role-${jobIndex}`),
+                    glue_version: "3.0",
+                    worker_type: "G.1X",
+                    number_of_workers: 2,
+                    command: {
+                        name: jobType === "python" ? "pythonshell" : "glueetl",
+                        script_location: `s3://glue-scripts-${region}/job-${jobIndex}.py`,
+                        python_version: "3.9"
+                    },
+                    default_arguments: {
+                        "--enable-metrics": "true",
+                        "--job-language": jobType === "python" ? "python" : "scala"
+                    },
+                    tags: {
+                        Name: jobName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateSageMakerEndpoint (region, endpointIndex) {
+        const endpointName = `inference-${region}-${endpointIndex}`;
+        const modelName = this.sagemakerModelNames[endpointIndex % this.sagemakerModelNames.length];
+        const instanceType = this.sagemakerInstanceTypes[endpointIndex % this.sagemakerInstanceTypes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_sagemaker_endpoint",
+            name: `endpoint_${endpointIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: endpointName,
+                    endpoint_config_name: `${endpointName}-config`,
+                    production_variants: [{
+                        variant_name: "primary",
+                        model_name: modelName,
+                        initial_instance_count: 1,
+                        instance_type: instanceType,
+                        initial_variant_weight: 1.0
+                    }],
+                    tags: {
+                        Name: endpointName,
+                        Environment: "production",
+                        Model: modelName
+                    }
+                }
+            }]
+        };
+    }
+
+    generateBackupVault (region, vaultIndex) {
+        const vaultName = `${this.backupVaultNames[vaultIndex % this.backupVaultNames.length]}-${region}`;
+
+        return {
+            mode: "managed",
+            type: "aws_backup_vault",
+            name: `vault_${vaultIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: vaultName,
+                    kms_key_arn: this.generateArn(region, "kms", "key", `backup-key-${vaultIndex}`),
+                    tags: {
+                        Name: vaultName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateAppSyncAPI (region, apiIndex) {
+        const apiName = `graphql-${region}-${apiIndex}`;
+        const authType = this.appSyncAuthTypes[apiIndex % this.appSyncAuthTypes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_appsync_graphql_api",
+            name: `appsync_${apiIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: apiName,
+                    authentication_type: authType,
+                    schema: `
+                        type Query {
+                            getItem(id: ID!): Item
+                        }
+                        type Item {
+                            id: ID!
+                            name: String!
+                        }
+                    `,
+                    xray_enabled: true,
+                    tags: {
+                        Name: apiName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateCodeBuildProject (region, projectIndex) {
+        const projectName = `build-${region}-${projectIndex}`;
+        const computeType = this.codeBuildComputeTypes[projectIndex % this.codeBuildComputeTypes.length];
+        const image = this.codeBuildImages[projectIndex % this.codeBuildImages.length];
+
+        return {
+            mode: "managed",
+            type: "aws_codebuild_project",
+            name: `build_${projectIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: projectName,
+                    service_role: this.generateArn(region, "iam", "role", `codebuild-role-${projectIndex}`),
+                    artifacts: [{
+                        type: "NO_ARTIFACTS"
+                    }],
+                    environment: [{
+                        compute_type: computeType,
+                        image: image,
+                        type: "LINUX_CONTAINER",
+                        privileged_mode: true
+                    }],
+                    source: [{
+                        type: "GITHUB",
+                        buildspec: "buildspec.yml",
+                        git_clone_depth: 1
+                    }],
+                    tags: {
+                        Name: projectName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateIoTRule (region, ruleIndex) {
+        const ruleName = `iot-rule-${region}-${ruleIndex}`;
+        const action = this.iotRuleActions[ruleIndex % this.iotRuleActions.length];
+
+        return {
+            mode: "managed",
+            type: "aws_iot_topic_rule",
+            name: `rule_${ruleIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: ruleName,
+                    description: "IoT Rule for sensor data",
+                    enabled: true,
+                    sql: "SELECT * FROM 'sensors/data'",
+                    sql_version: "2016-03-23",
+                    [action]: [{
+                        function_arn: action === "lambda" ? this.generateArn(region, "lambda", "function", `iot-handler-${ruleIndex}`) : null,
+                        role_arn: this.generateArn(region, "iam", "role", `iot-rule-${ruleIndex}`),
+                        table_name: action === "dynamodb" ? `iot_data_${ruleIndex}` : null,
+                        topic_arn: action === "sns" ? this.generateArn(region, "sns", "topic", `iot-notifications-${ruleIndex}`) : null,
+                        queue_url: action === "sqs" ? `https://sqs.${region}.amazonaws.com/${this.accountId}/iot-queue-${ruleIndex}` : null
+                    }],
+                    tags: {
+                        Name: ruleName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateRedshiftCluster (region, vpcId, subnetIds, clusterIndex) {
+        const clusterName = `redshift-${region}-${clusterIndex}`;
+        const nodeType = this.redshiftNodeTypes[clusterIndex % this.redshiftNodeTypes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_redshift_cluster",
+            name: `redshift_${clusterIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    cluster_identifier: clusterName,
+                    database_name: "analytics",
+                    master_username: "admin",
+                    node_type: nodeType,
+                    number_of_nodes: 2,
+                    cluster_subnet_group_name: this.generateId('subnet-group', clusterIndex, region),
+                    vpc_security_group_ids: [this.generateId('sg', clusterIndex, region)],
+                    skip_final_snapshot: true,
+                    encrypted: true,
+                    tags: {
+                        Name: clusterName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateWorkspaces (region, vpcId, subnetIds, workspaceIndex) {
+        const workspaceName = `workspace-${region}-${workspaceIndex}`;
+        const computeType = this.workspacesComputeTypes[workspaceIndex % this.workspacesComputeTypes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_workspaces_workspace",
+            name: `workspace_${workspaceIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 1,
+                attributes: {
+                    directory_id: this.generateId('d', workspaceIndex, region),
+                    bundle_id: this.generateId('wsb', workspaceIndex, region),
+                    user_name: `user${workspaceIndex}`,
+                    root_volume_encryption_enabled: true,
+                    user_volume_encryption_enabled: true,
+                    volume_encryption_key: this.generateArn(region, "kms", "key", `workspace-key-${workspaceIndex}`),
+                    workspace_properties: [{
+                        compute_type_name: computeType,
+                        user_volume_size_gib: 50,
+                        root_volume_size_gib: 80,
+                        running_mode: "AUTO_STOP",
+                        running_mode_auto_stop_timeout_in_minutes: 60
+                    }],
+                    tags: {
+                        Name: workspaceName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateServiceCatalogProduct (region, productIndex) {
+        const productName = `product-${region}-${productIndex}`;
+        const productType = this.serviceCatalogProductTypes[productIndex % this.serviceCatalogProductTypes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_servicecatalog_product",
+            name: `product_${productIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: productName,
+                    description: "Managed Service Catalog Product",
+                    owner: "Cloud Team",
+                    type: productType,
+                    provisioning_artifact_parameters: [{
+                        template_url: `https://s3.amazonaws.com/templates/template-${productIndex}.yaml`,
+                        template_physical_id: `template-${productIndex}`,
+                        name: "v1.0",
+                        description: "Initial version"
+                    }],
+                    tags: {
+                        Name: productName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateDataSyncTask (region, taskIndex) {
+        const taskName = `sync-task-${region}-${taskIndex}`;
+        const locationType = this.dataSyncLocationTypes[taskIndex % this.dataSyncLocationTypes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_datasync_task",
+            name: `sync_task_${taskIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: taskName,
+                    source_location_arn: this.generateArn(region, "datasync", "location", `source-${locationType}-${taskIndex}`),
+                    destination_location_arn: this.generateArn(region, "datasync", "location", `dest-${locationType}-${taskIndex}`),
+                    cloudwatch_log_group_arn: this.generateArn(region, "logs", "log-group", `datasync-${taskIndex}`),
+                    schedule: {
+                        schedule_expression: "cron(0 0 ? * SUN *)"
+                    },
+                    tags: {
+                        Name: taskName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateFSxFileSystem (region, vpcId, subnetIds, fsIndex) {
+        const fsName = `fsx-${region}-${fsIndex}`;
+        const fsType = this.fsxTypes[fsIndex % this.fsxTypes.length];
+
+        return {
+            mode: "managed",
+            type: fsType === "WINDOWS" ? "aws_fsx_windows_file_system" :
+                fsType === "LUSTRE" ? "aws_fsx_lustre_file_system" : "aws_fsx_ontap_file_system",
+            name: `fsx_${fsIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    storage_capacity: 300,
+                    subnet_ids: [subnetIds[0]],
+                    security_group_ids: [this.generateId('sg', fsIndex, region)],
+                    throughput_capacity: 128,
+                    storage_type: "SSD",
+                    deployment_type: fsType === "WINDOWS" ? "SINGLE_AZ_2" : "PERSISTENT_1",
+                    automatic_backup_retention_days: 7,
+                    tags: {
+                        Name: fsName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateGameLiftFleet (region, fleetIndex) {
+        const fleetName = `fleet-${region}-${fleetIndex}`;
+        const fleetType = this.gameLiftFleetTypes[fleetIndex % this.gameLiftFleetTypes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_gamelift_fleet",
+            name: `fleet_${fleetIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: fleetName,
+                    description: "Game server fleet",
+                    build_id: this.generateId('build', fleetIndex, region),
+                    ec2_instance_type: "c5.large",
+                    fleet_type: fleetType,
+                    instance_role_arn: this.generateArn(region, "iam", "role", `fleet-role-${fleetIndex}`),
+                    runtime_configuration: [{
+                        server_process: [{
+                            concurrent_executions: 1,
+                            launch_path: "/local/game/server.exe",
+                            parameters: "--port 7777"
+                        }]
+                    }],
+                    tags: {
+                        Name: fleetName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateMemoryDBCluster (region, vpcId, subnetIds, clusterIndex) {
+        const clusterName = `memorydb-${region}-${clusterIndex}`;
+        const nodeType = this.memoryDBNodeTypes[clusterIndex % this.memoryDBNodeTypes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_memorydb_cluster",
+            name: `memorydb_${clusterIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    cluster_name: clusterName,
+                    node_type: nodeType,
+                    num_shards: 2,
+                    num_replicas_per_shard: 1,
+                    subnet_group_name: this.generateId('subnet-group', clusterIndex, region),
+                    security_group_ids: [this.generateId('sg', clusterIndex, region)],
+                    tls_enabled: true,
+                    tags: {
+                        Name: clusterName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateMWAAEnvironment (region, vpcId, subnetIds, envIndex) {
+        const envName = `airflow-${region}-${envIndex}`;
+        const instanceType = this.mwaaEnvironmentTypes[envIndex % this.mwaaEnvironmentTypes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_mwaa_environment",
+            name: `airflow_${envIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: envName,
+                    airflow_version: "2.5.1",
+                    source_bucket_arn: this.generateArn(region, "s3", "", `airflow-${region}-${envIndex}`),
+                    dag_s3_path: "dags",
+                    environment_class: instanceType,
+                    execution_role_arn: this.generateArn(region, "iam", "role", `mwaa-role-${envIndex}`),
+                    network_configuration: [{
+                        security_group_ids: [this.generateId('sg', envIndex, region)],
+                        subnet_ids: subnetIds.slice(0, 2)
+                    }],
+                    tags: {
+                        Name: envName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateTransferServer (region, vpcId, subnetIds, serverIndex) {
+        const serverName = `transfer-${region}-${serverIndex}`;
+        const protocol = this.transferServerProtocols[serverIndex % this.transferServerProtocols.length];
+        const endpointType = this.transferFamilyEndpointTypes[serverIndex % this.transferFamilyEndpointTypes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_transfer_server",
+            name: `transfer_${serverIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    identity_provider_type: "SERVICE_MANAGED",
+                    protocols: [protocol],
+                    endpoint_type: endpointType,
+                    endpoint_details: endpointType === "VPC" ? [{
+                        vpc_id: vpcId,
+                        subnet_ids: subnetIds.slice(0, 2),
+                        security_group_ids: [this.generateId('sg', serverIndex, region)]
+                    }] : [],
+                    tags: {
+                        Name: serverName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateXRayGroup (region, groupIndex) {
+        const groupName = `xray-group-${region}-${groupIndex}`;
+        const pattern = this.xrayGroupPatterns[groupIndex % this.xrayGroupPatterns.length];
+
+        return {
+            mode: "managed",
+            type: "aws_xray_group",
+            name: `xray_${groupIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    group_name: groupName,
+                    filter_expression: pattern,
+                    insights_enabled: true,
+                    tags: {
+                        Name: groupName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateAppRunner (region, serviceIndex) {
+        const serviceName = `apprunner-${region}-${serviceIndex}`;
+        const runtime = this.appRunnerRuntimes[serviceIndex % this.appRunnerRuntimes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_apprunner_service",
+            name: `apprunner_${serviceIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    service_name: serviceName,
+                    source_configuration: [{
+                        auto_deployments_enabled: true,
+                        code_repository: [{
+                            code_configuration: [{
+                                runtime: runtime,
+                                build_command: "npm install",
+                                start_command: "npm start",
+                                port: "8080"
+                            }],
+                            repository_url: "https://github.com/example/repo",
+                            source_code_version: [{
+                                type: "BRANCH",
+                                value: "main"
+                            }]
+                        }]
+                    }],
+                    tags: {
+                        Name: serviceName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateEMRServerless (region, appIndex) {
+        const appName = `emr-serverless-${region}-${appIndex}`;
+        const runtime = this.emrServerlessRuntimes[appIndex % this.emrServerlessRuntimes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_emrserverless_application",
+            name: `emr_serverless_${appIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: appName,
+                    release_label: runtime,
+                    type: runtime.split('-')[0],
+                    maximum_capacity: [{
+                        cpu: "4 vCPU",
+                        memory: "16 GB"
+                    }],
+                    auto_stop_configuration: [{
+                        enabled: true,
+                        idle_timeout_minutes: 15
+                    }],
+                    tags: {
+                        Name: appName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateBatchComputeEnvironment (region, vpcId, subnetIds, envIndex) {
+        const envName = `batch-${region}-${envIndex}`;
+        const computeType = this.batchComputeEnvs[envIndex % this.batchComputeEnvs.length];
+
+        return {
+            mode: "managed",
+            type: "aws_batch_compute_environment",
+            name: `batch_${envIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    compute_environment_name: envName,
+                    type: "MANAGED",
+                    state: "ENABLED",
+                    service_role: this.generateArn(region, "iam", "role", `batch-service-role-${envIndex}`),
+                    compute_resources: [{
+                        type: computeType,
+                        max_vcpus: 16,
+                        security_group_ids: [this.generateId('sg', envIndex, region)],
+                        subnets: subnetIds,
+                        instance_type: computeType === "EC2" ? ["optimal"] : null
+                    }],
+                    tags: {
+                        Name: envName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateDocumentDBCluster (region, vpcId, subnetIds, clusterIndex) {
+        const clusterName = `docdb-${region}-${clusterIndex}`;
+        const version = this.documentDBEngineVersions[clusterIndex % this.documentDBEngineVersions.length];
+
+        return {
+            mode: "managed",
+            type: "aws_docdb_cluster",
+            name: `docdb_${clusterIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    cluster_identifier: clusterName,
+                    engine: "docdb",
+                    engine_version: version,
+                    master_username: "admin",
+                    db_subnet_group_name: this.generateId('subnet-group', clusterIndex, region),
+                    vpc_security_group_ids: [this.generateId('sg', clusterIndex, region)],
+                    storage_encrypted: true,
+                    backup_retention_period: 7,
+                    preferred_backup_window: "03:00-04:00",
+                    skip_final_snapshot: true,
+                    tags: {
+                        Name: clusterName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateKendraIndex (region, indexIndex) {
+        const indexName = `kendra-${region}-${indexIndex}`;
+        const edition = this.kendraEditions[indexIndex % this.kendraEditions.length];
+
+        return {
+            mode: "managed",
+            type: "aws_kendra_index",
+            name: `kendra_${indexIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: indexName,
+                    edition: edition,
+                    role_arn: this.generateArn(region, "iam", "role", `kendra-role-${indexIndex}`),
+                    description: "Enterprise search index",
+                    user_token_configurations: [{
+                        json_token_type_configuration: [{
+                            group_attribute_field: "groups",
+                            user_name_attribute_field: "username"
+                        }]
+                    }],
+                    tags: {
+                        Name: indexName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateMediaPackageChannel (region, channelIndex) {
+        const channelName = `channel-${region}-${channelIndex}`;
+        const type = this.mediaPackageChannelTypes[channelIndex % this.mediaPackageChannelTypes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_media_package_channel",
+            name: `channel_${channelIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    channel_id: channelName,
+                    description: `${type} streaming channel`,
+                    tags: {
+                        Name: channelName,
+                        Environment: "production",
+                        Type: type
+                    }
+                }
+            }]
+        };
+    }
+
+    generateElasticTranscoderPipeline (region, pipelineIndex) {
+        const pipelineName = `transcode-${region}-${pipelineIndex}`;
+        const preset = this.elasticTranscoderPresets[pipelineIndex % this.elasticTranscoderPresets.length];
+
+        return {
+            mode: "managed",
+            type: "aws_elastictranscoder_pipeline",
+            name: `pipeline_${pipelineIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: pipelineName,
+                    input_bucket: `input-bucket-${region}-${pipelineIndex}`,
+                    output_bucket: `output-bucket-${region}-${pipelineIndex}`,
+                    role: this.generateArn(region, "iam", "role", `transcoder-role-${pipelineIndex}`),
+                    content_config: [{
+                        bucket: `output-bucket-${region}-${pipelineIndex}`,
+                        storage_class: "Standard"
+                    }],
+                    thumbnail_config: [{
+                        bucket: `thumbnail-bucket-${region}-${pipelineIndex}`,
+                        storage_class: "Standard"
+                    }],
+                    notifications: [{
+                        completed: this.generateArn(region, "sns", "topic", `transcode-complete-${pipelineIndex}`),
+                        error: this.generateArn(region, "sns", "topic", `transcode-error-${pipelineIndex}`)
+                    }],
+                    tags: {
+                        Name: pipelineName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateQuickSightAnalysis (region, analysisIndex) {
+        const analysisName = `analysis-${region}-${analysisIndex}`;
+        const dataSource = this.quickSightDataSources[analysisIndex % this.quickSightDataSources.length];
+
+        return {
+            mode: "managed",
+            type: "aws_quicksight_analysis",
+            name: `analysis_${analysisIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: analysisName,
+                    aws_account_id: this.accountId,
+                    theme_arn: this.generateArn(region, "quicksight", "theme", "default"),
+                    source_entity: [{
+                        source_template: [{
+                            data_set_references: [{
+                                data_set_arn: this.generateArn(region, "quicksight", "dataset", `dataset-${analysisIndex}`),
+                                data_set_placeholder: dataSource
+                            }]
+                        }]
+                    }],
+                    tags: {
+                        Name: analysisName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateAmplifyApp (region, appIndex) {
+        const appName = `amplify-${region}-${appIndex}`;
+        const framework = this.amplifyFrameworks[appIndex % this.amplifyFrameworks.length];
+
+        return {
+            mode: "managed",
+            type: "aws_amplify_app",
+            name: `app_${appIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: appName,
+                    repository: "https://github.com/example/repo",
+                    platform: framework,
+                    build_spec: `
+                        version: 1
+                        frontend:
+                          phases:
+                            build:
+                              commands:
+                                - npm install
+                                - npm run build
+                    `,
+                    enable_branch_auto_build: true,
+                    enable_auto_branch_creation: true,
+                    auto_branch_creation_patterns: ["feature/*", "release/*"],
+                    tags: {
+                        Name: appName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateACMCertificate (region, certIndex) {
+        const domainName = `${this.route53Domains[certIndex % this.route53Domains.length]}`;
+        const validationMethod = this.acmValidationMethods[certIndex % this.acmValidationMethods.length];
+
+        return {
+            mode: "managed",
+            type: "aws_acm_certificate",
+            name: `cert_${certIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    domain_name: domainName,
+                    validation_method: validationMethod,
+                    subject_alternative_names: [`*.${domainName}`],
+                    tags: {
+                        Name: `cert-${region}-${certIndex}`,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateDirectoryService (region, vpcId, subnetIds, directoryIndex) {
+        const directoryName = `directory-${region}-${directoryIndex}`;
+        const type = this.directoryTypes[directoryIndex % this.directoryTypes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_directory_service_directory",
+            name: `directory_${directoryIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: "corp.example.com",
+                    password: "SuperSecretPassw0rd",
+                    edition: type === "MicrosoftAD" ? "Standard" : null,
+                    type: type,
+                    vpc_settings: [{
+                        vpc_id: vpcId,
+                        subnet_ids: subnetIds.slice(0, 2)
+                    }],
+                    tags: {
+                        Name: directoryName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateGlobalAccelerator (region, acceleratorIndex) {
+        const acceleratorName = `accelerator-${region}-${acceleratorIndex}`;
+        const protocol = this.globalAcceleratorProtocols[acceleratorIndex % this.globalAcceleratorProtocols.length];
+
+        return {
+            mode: "managed",
+            type: "aws_globalaccelerator_accelerator",
+            name: `accelerator_${acceleratorIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: acceleratorName,
+                    ip_address_type: "IPV4",
+                    enabled: true,
+                    attributes: [{
+                        flow_logs_enabled: true,
+                        flow_logs_s3_bucket: `flow-logs-${region}-${acceleratorIndex}`,
+                        flow_logs_s3_prefix: "logs/"
+                    }],
+                    tags: {
+                        Name: acceleratorName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateQLDBLedger (region, ledgerIndex) {
+        const ledgerName = `ledger-${region}-${ledgerIndex}`;
+        const permissionMode = this.qldbLedgerPermissionModes[ledgerIndex % this.qldbLedgerPermissionModes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_qldb_ledger",
+            name: `ledger_${ledgerIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: ledgerName,
+                    permissions_mode: permissionMode,
+                    deletion_protection: true,
+                    tags: {
+                        Name: ledgerName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateVPCLatticeServiceNetwork (region, networkIndex) {
+        const networkName = `lattice-network-${region}-${networkIndex}`;
+
+        return {
+            mode: "managed",
+            type: "aws_vpclattice_service_network",
+            name: `lattice_network_${networkIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: networkName,
+                    auth_type: "NONE",
+                    tags: {
+                        Name: networkName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generatePrivateCA (region, caIndex) {
+        const caName = `private-ca-${region}-${caIndex}`;
+        const keyType = this.privateCaKeyTypes[caIndex % this.privateCaKeyTypes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_acmpca_certificate_authority",
+            name: `ca_${caIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    type: "ROOT",
+                    certificate_authority_configuration: [{
+                        key_algorithm: keyType,
+                        signing_algorithm: "SHA512WITHRSA",
+                        subject: [{
+                            common_name: "example.com",
+                            country: "US",
+                            organization: "Example Corp",
+                            organizational_unit: "IT"
+                        }]
+                    }],
+                    tags: {
+                        Name: caName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateSystemsManagerDocument (region, docIndex) {
+        const docName = `ssm-doc-${region}-${docIndex}`;
+        const docType = this.systemsManagerDocumentTypes[docIndex % this.systemsManagerDocumentTypes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_ssm_document",
+            name: `document_${docIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: docName,
+                    document_type: docType,
+                    document_format: "YAML",
+                    content: JSON.stringify({
+                        schemaVersion: "2.2",
+                        description: "Sample SSM Document",
+                        parameters: {
+                            Message: { type: "String", description: "Message to display" }
+                        },
+                        mainSteps: [{
+                            action: "aws:runShellScript",
+                            name: "displayMessage",
+                            inputs: {
+                                runCommand: ["echo {{Message}}"]
+                            }
+                        }]
+                    }),
+                    tags: {
+                        Name: docName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateAthenaWorkgroup (region, workgroupIndex) {
+        const workgroupName = `workgroup-${region}-${workgroupIndex}`;
+        const engineVersion = this.athenaEngineVersions[workgroupIndex % this.athenaEngineVersions.length];
+
+        return {
+            mode: "managed",
+            type: "aws_athena_workgroup",
+            name: `workgroup_${workgroupIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: workgroupName,
+                    force_destroy: true,
+                    configuration: [{
+                        enforce_workgroup_configuration: true,
+                        engine_version: {
+                            selected_engine_version: engineVersion
+                        },
+                        result_configuration: [{
+                            output_location: `s3://athena-results-${region}-${workgroupIndex}/`,
+                            encryption_configuration: [{
+                                encryption_option: "SSE_S3"
+                            }]
+                        }]
+                    }],
+                    tags: {
+                        Name: workgroupName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateTimeStreamDatabase (region, dbIndex) {
+        const dbName = `${this.timeStreamDatabases[dbIndex % this.timeStreamDatabases.length]}-${region}-${dbIndex}`;
+
+        return {
+            mode: "managed",
+            type: "aws_timestreamwrite_database",
+            name: `timestream_${dbIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    database_name: dbName,
+                    kms_key_id: this.generateArn(region, "kms", "key", `timestream-key-${dbIndex}`),
+                    tags: {
+                        Name: dbName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateManagedGrafana (region, workspaceIndex) {
+        const workspaceName = `grafana-${region}-${workspaceIndex}`;
+        const licenseType = this.managedGrafanaWorkspaces[workspaceIndex % this.managedGrafanaWorkspaces.length];
+
+        return {
+            mode: "managed",
+            type: "aws_grafana_workspace",
+            name: `grafana_${workspaceIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: workspaceName,
+                    account_access_type: "CURRENT_ACCOUNT",
+                    authentication_providers: ["AWS_SSO"],
+                    permission_type: "SERVICE_MANAGED",
+                    role_arn: this.generateArn(region, "iam", "role", `grafana-role-${workspaceIndex}`),
+                    data_sources: ["CLOUDWATCH", "PROMETHEUS", "XRAY"],
+                    tags: {
+                        Name: workspaceName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateComprehendEndpoint (region, endpointIndex) {
+        const endpointName = `comprehend-${region}-${endpointIndex}`;
+        const endpointType = this.comprehendEndpointTypes[endpointIndex % this.comprehendEndpointTypes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_comprehend_endpoint",
+            name: `comprehend_${endpointIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: endpointName,
+                    model_arn: this.generateArn(region, "comprehend", "model", `model-${endpointIndex}`),
+                    desired_inference_units: 1,
+                    data_access_role_arn: this.generateArn(region, "iam", "role", `comprehend-role-${endpointIndex}`),
+                    tags: {
+                        Name: endpointName,
+                        Environment: "production",
+                        Type: endpointType
+                    }
+                }
+            }]
+        };
+    }
+
+    generateRekognitionCollection (region, collectionIndex) {
+        const collectionName = `rekognition-${region}-${collectionIndex}`;
+        const collectionType = this.rekognitionCollections[collectionIndex % this.rekognitionCollections.length];
+
+        return {
+            mode: "managed",
+            type: "aws_rekognition_collection",
+            name: `collection_${collectionIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    collection_id: collectionName,
+                    tags: {
+                        Name: collectionName,
+                        Environment: "production",
+                        Type: collectionType
+                    }
+                }
+            }]
+        };
+    }
+
+    generateLexBot (region, botIndex) {
+        const botName = `lex-bot-${region}-${botIndex}`;
+        const botType = this.lexBotTypes[botIndex % this.lexBotTypes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_lex_bot",
+            name: `bot_${botIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: botName,
+                    description: "Customer Service Bot",
+                    process_behavior: "BUILD",
+                    child_directed: false,
+                    create_version: true,
+                    locale: "en-US",
+                    abort_statement: [{
+                        message: [{
+                            content: "Sorry, I cannot help you at this time.",
+                            content_type: "PlainText"
+                        }]
+                    }],
+                    tags: {
+                        Name: botName,
+                        Environment: "production",
+                        Type: botType
+                    }
+                }
+            }]
+        };
+    }
+
+    generateForecastDataset (region, datasetIndex) {
+        const datasetName = `forecast-${region}-${datasetIndex}`;
+        const datasetType = this.forecastDatasetTypes[datasetIndex % this.forecastDatasetTypes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_forecast_dataset",
+            name: `dataset_${datasetIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    dataset_name: datasetName,
+                    dataset_type: datasetType,
+                    domain: "CUSTOM",
+                    schema: {
+                        attributes: [
+                            { attributeName: "timestamp", attributeType: "timestamp" },
+                            { attributeName: "target_value", attributeType: "float" }
+                        ]
+                    },
+                    tags: {
+                        Name: datasetName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateFraudDetectorModel (region, modelIndex) {
+        const modelName = `fraud-${region}-${modelIndex}`;
+        const modelType = this.fraudDetectorModelTypes[modelIndex % this.fraudDetectorModelTypes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_frauddetector_detector",
+            name: `detector_${modelIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    detector_id: modelName,
+                    description: `Fraud detector for ${modelType}`,
+                    event_type_name: `${modelType}_EVENT`,
+                    tags: {
+                        Name: modelName,
+                        Environment: "production",
+                        Type: modelType
+                    }
+                }
+            }]
+        };
+    }
+
+    generateHealthLakeDatastore (region, datastoreIndex) {
+        const datastoreName = `healthlake-${region}-${datastoreIndex}`;
+        const format = this.healthLakeFormats[datastoreIndex % this.healthLakeFormats.length];
+
+        return {
+            mode: "managed",
+            type: "aws_healthlake_datastore",
+            name: `datastore_${datastoreIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    datastore_name: datastoreName,
+                    datastore_type_version: format,
+                    preload_data_config: [{
+                        preload_data_type: "SYNTHEA"
+                    }],
+                    tags: {
+                        Name: datastoreName,
+                        Environment: "production",
+                        Format: format
+                    }
+                }
+            }]
+        };
+    }
+
+    generateLookoutMetricsDetector (region, detectorIndex) {
+        const detectorName = `lookout-${region}-${detectorIndex}`;
+        const frequency = this.lookoutMetricsFrequencies[detectorIndex % this.lookoutMetricsFrequencies.length];
+
+        return {
+            mode: "managed",
+            type: "aws_lookoutmetrics_alert",
+            name: `detector_${detectorIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    alert_name: detectorName,
+                    alert_sensitivity_threshold: 50,
+                    alert_description: "Anomaly detection alert",
+                    metric_monitor_configuration: [{
+                        metric_list: [{
+                            metric_name: "cpu_utilization",
+                            aggregation_function: "AVG"
+                        }]
+                    }],
+                    tags: {
+                        Name: detectorName,
+                        Environment: "production",
+                        Frequency: frequency
+                    }
+                }
+            }]
+        };
+    }
+
+    generateConnectInstance (region, instanceIndex) {
+        const instanceName = `connect-${region}-${instanceIndex}`;
+        const instanceType = this.connectInstanceTypes[instanceIndex % this.connectInstanceTypes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_connect_instance",
+            name: `instance_${instanceIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    instance_alias: instanceName,
+                    directory_id: this.generateId('d', instanceIndex, region),
+                    identity_management_type: "CONNECT_MANAGED",
+                    inbound_calls_enabled: true,
+                    outbound_calls_enabled: true,
+                    instance_type: instanceType,
+                    tags: {
+                        Name: instanceName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateGuardDutyDetector (region, detectorIndex) {
+        const detectorName = `guard-${region}-${detectorIndex}`;
+        const severity = this.guardDutyDetectorSeverities[detectorIndex % this.guardDutyDetectorSeverities.length];
+
+        return {
+            mode: "managed",
+            type: "aws_guardduty_detector",
+            name: `detector_${detectorIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    enable: true,
+                    finding_publishing_frequency: "FIFTEEN_MINUTES",
+                    datasources: [{
+                        s3_logs: {
+                            enable: true
+                        },
+                        kubernetes: {
+                            audit_logs: {
+                                enable: true
+                            }
+                        }
+                    }],
+                    tags: {
+                        Name: detectorName,
+                        Environment: "production",
+                        Severity: severity
+                    }
+                }
+            }]
+        };
+    }
+
+    generateMacieSeverity (region, severityIndex) {
+        const severityName = `macie-severity-${region}-${severityIndex}`;
+        const severity = this.macieSeverities[severityIndex % this.macieSeverities.length];
+
+        return {
+            mode: "managed",
+            type: "aws_macie_account_sensitivity_configuration",
+            name: `macie_severity_${severityIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    server_side_encryption: {
+                        kms_encrypted: true,
+                        kms_key_id: this.generateArn(region, "kms", "key", `macie-key-${severityIndex}`)
+                    },
+                    bucket_level_permissions: {
+                        account_level_permissions: {
+                            allow_public_access: false,
+                            deny_public_and_internal_rule: {
+                                deny_public_access: true,
+                                deny_internal_access: true
+                            }
+                        },
+                        bucket_policy: {
+                            allow_public_access: false,
+                            deny_public_and_internal_rule: {
+                                deny_public_access: true,
+                                deny_internal_access: true
+                            }
+                        }
+                    },
+                    tags: {
+                        Name: severityName,
+                        Environment: "production",
+                        Severity: severity
+                    }
+                }
+            }]
+        };
+    }
+
+    generateSecurityHubStandard (region, standardIndex) {
+        const standardName = `security-hub-standard-${region}-${standardIndex}`;
+        const standard = this.securityHubStandards[standardIndex % this.securityHubStandards.length];
+
+        return {
+            mode: "managed",
+            type: "aws_securityhub_standards_subscription",
+            name: `security_hub_standard_${standardIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    standards_subscription_arn: this.generateArn(region, "securityhub", "standards_subscription", `standard-${standard}`),
+                    tags: {
+                        Name: standardName,
+                        Environment: "production",
+                        Standard: standard
+                    }
+                }
+            }]
+        };
+    }
+
+    generateNetworkFirewall (region, firewallIndex) {
+        const firewallName = `firewall-${region}-${firewallIndex}`;
+        const policyType = this.networkFirewallPolicies[firewallIndex % this.networkFirewallPolicies.length];
+
+        return {
+            mode: "managed",
+            type: "aws_networkfirewall_firewall",
+            name: `firewall_${firewallIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: firewallName,
+                    firewall_policy_arn: this.generateArn(region, "network-firewall", "firewall-policy", `policy-${firewallIndex}`),
+                    vpc_id: this.generateId('vpc', firewallIndex, region),
+                    subnet_mapping: [{
+                        subnet_id: this.generateId('subnet', firewallIndex, region)
+                    }],
+                    tags: {
+                        Name: firewallName,
+                        Environment: "production",
+                        Type: policyType
+                    }
+                }
+            }]
+        };
+    }
+
+    generateShieldProtection (region, protectionIndex) {
+        const protectionName = `shield-${region}-${protectionIndex}`;
+        const layer = this.shieldProtectionLayers[protectionIndex % this.shieldProtectionLayers.length];
+
+        return {
+            mode: "managed",
+            type: "aws_shield_protection",
+            name: `protection_${protectionIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: protectionName,
+                    resource_arn: this.generateArn(region, "elasticloadbalancing", "loadbalancer", `app/shield-${protectionIndex}`),
+                    tags: {
+                        Name: protectionName,
+                        Environment: "production",
+                        Layer: layer
+                    }
+                }
+            }]
+        };
+    }
+
+    generateWAFIPSet (region, ipSetIndex) {
+        const ipSetName = `waf-ipset-${region}-${ipSetIndex}`;
+        const ipSetType = this.wafIPSetTypes[ipSetIndex % this.wafIPSetTypes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_wafv2_ip_set",
+            name: `ipset_${ipSetIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: ipSetName,
+                    description: `IP set for ${ipSetType} addresses`,
+                    scope: "REGIONAL",
+                    ip_address_version: ipSetType,
+                    addresses: ipSetType === "IPV4" ? ["10.0.0.0/8"] : ["2001:db8::/32"],
+                    tags: {
+                        Name: ipSetName,
+                        Environment: "production",
+                        Type: ipSetType
+                    }
+                }
+            }]
+        };
+    }
+
+    generateMediaLiveChannel (region, channelIndex) {
+        const channelName = `medialive-${region}-${channelIndex}`;
+        const channelType = this.mediaLiveChannelTypes[channelIndex % this.mediaLiveChannelTypes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_medialive_channel",
+            name: `channel_${channelIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: channelName,
+                    channel_class: channelType,
+                    role_arn: this.generateArn(region, "iam", "role", `medialive-role-${channelIndex}`),
+                    input_specification: [{
+                        codec: "AVC",
+                        maximum_bitrate: "MAX_20_MBPS",
+                        resolution: "HD"
+                    }],
+                    tags: {
+                        Name: channelName,
+                        Environment: "production",
+                        Type: channelType
+                    }
+                }
+            }]
+        };
+    }
+
+    generateIoTThing (region, thingIndex) {
+        const thingName = `iot-thing-${region}-${thingIndex}`;
+        const thingType = this.iotThingTypes[thingIndex % this.iotThingTypes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_iot_thing",
+            name: `thing_${thingIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: thingName,
+                    thing_type_name: thingType,
+                    attributes: {
+                        model: "v1",
+                        serial: `${thingType}-${thingIndex}`,
+                        firmware: "1.0.0"
+                    },
+                    tags: {
+                        Name: thingName,
+                        Environment: "production",
+                        Type: thingType
+                    }
+                }
+            }]
+        };
+    }
+
+    generateRAMResourceShare (region, shareIndex) {
+        const shareName = `share-${region}-${shareIndex}`;
+        const shareType = this.ramSharingTypes[shareIndex % this.ramSharingTypes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_ram_resource_share",
+            name: `share_${shareIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: shareName,
+                    allow_external_principals: false,
+                    permission_arns: [
+                        this.generateArn(region, "ram", "permission", `${shareType.toLowerCase()}-sharing`)
+                    ],
+                    tags: {
+                        Name: shareName,
+                        Environment: "production",
+                        Type: shareType
+                    }
+                }
+            }]
+        };
+    }
+
+    generateServiceCatalogTagOption (region, optionIndex) {
+        const optionKey = this.serviceCatalogTagOptions[optionIndex % this.serviceCatalogTagOptions.length];
+
+        return {
+            mode: "managed",
+            type: "aws_servicecatalog_tag_option",
+            name: `tag_option_${optionIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    key: optionKey,
+                    value: `${optionKey.toLowerCase()}-value-${optionIndex}`,
+                    active: true
+                }
+            }]
+        };
+    }
+
+    generateInspectorAssessment (region, assessmentIndex) {
+        const assessmentName = `assessment-${region}-${assessmentIndex}`;
+        const assessmentType = this.inspectorAssessmentTypes[assessmentIndex % this.inspectorAssessmentTypes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_inspector_assessment_template",
+            name: `assessment_${assessmentIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: assessmentName,
+                    target_arn: this.generateArn(region, "inspector", "target", `target-${assessmentIndex}`),
+                    duration: 3600,
+                    rules_package_arns: [
+                        this.generateArn(region, "inspector", "rulespackage", assessmentType.toLowerCase())
+                    ],
+                    tags: {
+                        Name: assessmentName,
+                        Environment: "production",
+                        Type: assessmentType
+                    }
+                }
+            }]
+        };
+    }
+
+    generateLicenseConfiguration (region, licenseIndex) {
+        const licenseName = `license-${region}-${licenseIndex}`;
+        const licenseType = this.licenseManagerTypes[licenseIndex % this.licenseManagerTypes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_licensemanager_license_configuration",
+            name: `license_${licenseIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: licenseName,
+                    description: `${licenseType} license configuration`,
+                    license_counting_type: "Instance",
+                    license_rules: ["#minimumVCpus=2"],
+                    tags: {
+                        Name: licenseName,
+                        Environment: "production",
+                        Type: licenseType
+                    }
+                }
+            }]
+        };
+    }
+
+    generateProtonEnvironment (region, envIndex) {
+        const envName = `proton-${region}-${envIndex}`;
+        const envType = this.protonEnvironmentTypes[envIndex % this.protonEnvironmentTypes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_proton_environment",
+            name: `environment_${envIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: envName,
+                    environment_account_connection_id: this.generateId('conn', envIndex, region),
+                    spec: JSON.stringify({
+                        proton: "1.0",
+                        environment: {
+                            type: envType,
+                            compute: {
+                                type: "FARGATE",
+                                capacity: "SMALL"
+                            }
+                        }
+                    }),
+                    tags: {
+                        Name: envName,
+                        Environment: "production",
+                        Type: envType
+                    }
+                }
+            }]
+        };
+    }
+
+    generateBedrockModel (region, modelIndex) {
+        const modelName = `bedrock-${region}-${modelIndex}`;
+        const modelId = this.bedrockModels[modelIndex % this.bedrockModels.length];
+
+        return {
+            mode: "managed",
+            type: "aws_bedrock_model",
+            name: `model_${modelIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: modelName,
+                    model_id: modelId,
+                    custom_model: false,
+                    inference_configuration: [{
+                        container_configuration: [{
+                            memory_size_in_gb: 4,
+                            vcpu: 1
+                        }]
+                    }],
+                    tags: {
+                        Name: modelName,
+                        Environment: "production"
+                    }
+                }
+            }]
+        };
+    }
+
+    generateTextractAnalysis (region, analysisIndex) {
+        const analysisName = `textract-${region}-${analysisIndex}`;
+        const feature = this.textractFeatures[analysisIndex % this.textractFeatures.length];
+
+        return {
+            mode: "managed",
+            type: "aws_textract_analysis",
+            name: `analysis_${analysisIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: analysisName,
+                    feature_types: [feature],
+                    role_arn: this.generateArn(region, "iam", "role", `textract-role-${analysisIndex}`),
+                    tags: {
+                        Name: analysisName,
+                        Environment: "production",
+                        Feature: feature
+                    }
+                }
+            }]
+        };
+    }
+
+    generatePollyLexicon (region, lexiconIndex) {
+        const lexiconName = `polly-${region}-${lexiconIndex}`;
+        const engine = this.pollyEngines[lexiconIndex % this.pollyEngines.length];
+
+        return {
+            mode: "managed",
+            type: "aws_polly_lexicon",
+            name: `lexicon_${lexiconIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: lexiconName,
+                    content: `<?xml version="1.0" encoding="UTF-8"?>
+                        <lexicon version="1.0" xmlns="http://www.w3.org/2005/01/pronunciation-lexicon">
+                            <lexeme><grapheme>AWS</grapheme><alias>Amazon Web Services</alias></lexeme>
+                        </lexicon>`,
+                    tags: {
+                        Name: lexiconName,
+                        Environment: "production",
+                        Engine: engine
+                    }
+                }
+            }]
+        };
+    }
+
+    generateTranscribeVocabulary (region, vocabIndex) {
+        const vocabName = `vocab-${region}-${vocabIndex}`;
+        const language = this.transcribeLanguages[vocabIndex % this.transcribeLanguages.length];
+
+        return {
+            mode: "managed",
+            type: "aws_transcribe_vocabulary",
+            name: `vocabulary_${vocabIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    vocabulary_name: vocabName,
+                    language_code: language,
+                    phrases: ["AWS", "Amazon", "Cloud"],
+                    tags: {
+                        Name: vocabName,
+                        Environment: "production",
+                        Language: language
+                    }
+                }
+            }]
+        };
+    }
+
+    generateOpenSearchServerlessCollection (region, collectionIndex) {
+        const collectionName = `opensearch-serverless-${region}-${collectionIndex}`;
+        const collectionType = this.openSearchServerlessCollectionTypes[collectionIndex % this.openSearchServerlessCollectionTypes.length];
+        const capacityUnits = this.openSearchServerlessCapacityUnits[collectionIndex % this.openSearchServerlessCapacityUnits.length];
+        const retention = this.openSearchServerlessRetention[collectionIndex % this.openSearchServerlessRetention.length];
+
+        return {
+            mode: "managed",
+            type: "aws_opensearchserverless_collection",
+            name: `collection_${collectionIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: collectionName,
+                    description: `${collectionType} collection for analytics`,
+                    type: collectionType,
+                    retention: retention,
+                    capacity_configuration: [{
+                        warm_units: capacityUnits,
+                        cold_units: Math.floor(capacityUnits / 2)
+                    }],
+                    encryption_security: [{
+                        kms_key_arn: this.generateArn(region, "kms", "key", `opensearch-key-${collectionIndex}`)
+                    }],
+                    network_security: [{
+                        saml_options: [{
+                            enabled: true,
+                            session_timeout: "1h",
+                            identity_provider: {
+                                entity_id: `https://opensearch-${region}-${collectionIndex}`,
+                                metadata_content: "SAML_METADATA_CONTENT"
+                            }
+                        }]
+                    }],
+                    tags: {
+                        Name: collectionName,
+                        Environment: "production",
+                        Type: collectionType
+                    }
+                }
+            }]
+        };
+    }
+
+    generateRedshiftServerlessWorkgroup (region, workgroupIndex) {
+        const workgroupName = `redshift-serverless-${region}-${workgroupIndex}`;
+        const workgroupType = this.redshiftServerlessWorkgroupTypes[workgroupIndex % this.redshiftServerlessWorkgroupTypes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_redshiftserverless_workgroup",
+            name: `workgroup_${workgroupIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    workgroup_name: workgroupName,
+                    base_capacity: 8,
+                    enhanced_vpc_routing: true,
+                    publicly_accessible: false,
+                    security_group_ids: [this.generateId('sg', workgroupIndex, region)],
+                    subnet_ids: [this.generateId('subnet', workgroupIndex, region)],
+                    tags: {
+                        Name: workgroupName,
+                        Environment: "production",
+                        Type: workgroupType
+                    }
+                }
+            }]
+        };
+    }
+
+    generateLakeFormation (region, lakeIndex) {
+        const lakeName = `lake-${region}-${lakeIndex}`;
+        const dataType = this.lakeFormationDataTypes[lakeIndex % this.lakeFormationDataTypes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_lakeformation_resource",
+            name: `lake_${lakeIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    arn: this.generateArn(region, "s3", "", `${lakeName}-bucket`),
+                    role_arn: this.generateArn(region, "iam", "role", `lakeformation-role-${lakeIndex}`),
+                    resource_type: dataType,
+                    tags: {
+                        Name: lakeName,
+                        Environment: "production",
+                        Type: dataType
+                    }
+                }
+            }]
+        };
+    }
+
+    generateGlueDataBrew (region, jobIndex) {
+        const jobName = `databrew-${region}-${jobIndex}`;
+        const ruleset = this.glueDataBrewRulesets[jobIndex % this.glueDataBrewRulesets.length];
+
+        return {
+            mode: "managed",
+            type: "aws_databrew_job",
+            name: `databrew_${jobIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: jobName,
+                    role_arn: this.generateArn(region, "iam", "role", `databrew-role-${jobIndex}`),
+                    type: "RECIPE",
+                    project_name: `project-${jobIndex}`,
+                    dataset_name: `dataset-${jobIndex}`,
+                    max_capacity: 5,
+                    max_retries: 3,
+                    timeout: 2880,
+                    tags: {
+                        Name: jobName,
+                        Environment: "production",
+                        Ruleset: ruleset
+                    }
+                }
+            }]
+        };
+    }
+
+    generateCleanRoom (region, roomIndex) {
+        const roomName = `cleanroom-${region}-${roomIndex}`;
+        const membershipType = this.cleanRoomMembershipTypes[roomIndex % this.cleanRoomMembershipTypes.length];
+
+        return {
+            mode: "managed",
+            type: "aws_cleanrooms_collaboration",
+            name: `cleanroom_${roomIndex}`,
+            provider: "provider[\"registry.terraform.io/hashicorp/aws\"]",
+            instances: [{
+                schema_version: 0,
+                attributes: {
+                    name: roomName,
+                    description: `Clean room for ${membershipType}`,
+                    creator_member_abilities: ["CAN_QUERY", "CAN_RECEIVE_RESULTS"],
+                    member_abilities: ["CAN_QUERY"],
+                    query_log_status: "ENABLED",
+                    tags: {
+                        Name: roomName,
+                        Environment: "production",
+                        Type: membershipType
+                    }
+                }
+            }]
+        };
+    }
+
+    generateStateFile () {
+        const resources = [];
+
+        for (const region of this.regions) {
+            console.log(`Generating resources for region ${region}...`);
+
+            for (let vpcIdx = 0; vpcIdx < this.vpcCountPerRegion; vpcIdx++) {
+                // Generate VPC
+                const vpc = this.generateVpc(region, vpcIdx);
+                const vpcId = vpc.instances[0].attributes.id;
+                resources.push(vpc);
+                this.resourceCount++;
+
+                // Generate Subnets (4 per VPC)
+                const subnetIds = [];
+                for (let subnetIdx = 0; subnetIdx < 4; subnetIdx++) {
+                    const subnet = this.generateSubnet(region, vpcId, subnetIdx, subnetIdx < 2);
+                    subnetIds.push(subnet.instances[0].attributes.id);
+                    resources.push(subnet);
+                    this.resourceCount++;
+                }
+
+                // Generate EC2 Instances (5 per VPC)
+                for (let i = 0; i < 5; i++) {
+                    resources.push(this.generateEC2Instance(region, subnetIds[i % 4], vpcId, i));
+                    this.resourceCount++;
+                }
+
+                // Generate RDS Instances (2 per VPC)
+                for (let i = 0; i < 2; i++) {
+                    resources.push(this.generateRDSInstance(region, subnetIds, vpcId, i));
+                    this.resourceCount++;
+                }
+
+                // Generate S3 Buckets (3 per VPC)
+                for (let i = 0; i < 3; i++) {
+                    resources.push(this.generateS3Bucket(region, i));
+                    this.resourceCount++;
+                }
+
+                // Generate Lambda Functions (4 per VPC)
+                for (let i = 0; i < 4; i++) {
+                    resources.push(this.generateLambdaFunction(region, vpcId, subnetIds, i));
+                    this.resourceCount++;
+                }
+
+                // Generate additional resources
+                // ECS Clusters (2 per VPC)
+                for (let i = 0; i < 2; i++) {
+                    resources.push(this.generateECSCluster(region, i));
+                    this.resourceCount++;
+                }
+
+                // Elasticache Clusters (2 per VPC)
+                for (let i = 0; i < 2; i++) {
+                    resources.push(this.generateElasticacheCluster(region, subnetIds, vpcId, i));
+                    this.resourceCount++;
+                }
+
+                // DynamoDB Tables (5 per VPC)
+                for (let i = 0; i < 5; i++) {
+                    resources.push(this.generateDynamoDBTable(region, i));
+                    this.resourceCount++;
+                }
+
+                // EKS Clusters (1 per VPC)
+                resources.push(this.generateEKSCluster(region, vpcId, subnetIds, vpcIdx));
+                this.resourceCount++;
+
+                // Generate API Gateways (2 per VPC)
+                for (let i = 0; i < 2; i++) {
+                    resources.push(this.generateAPIGateway(region, i));
+                    this.resourceCount++;
+                }
+
+                // Generate SQS Queues (4 per VPC)
+                for (let i = 0; i < 4; i++) {
+                    resources.push(this.generateSQSQueue(region, i));
+                    this.resourceCount++;
+                }
+
+                // Generate Kinesis Streams (2 per VPC)
+                for (let i = 0; i < 2; i++) {
+                    resources.push(this.generateKinesisStream(region, i));
+                    this.resourceCount++;
+                }
+
+                // Generate CloudFront Distributions (1 per VPC)
+                resources.push(this.generateCloudFrontDistribution(region, vpcIdx));
+                this.resourceCount++;
+
+                // Generate EventBridge Rules (3 per VPC)
+                for (let i = 0; i < 3; i++) {
+                    resources.push(this.generateEventBridgeRule(region, i));
+                    this.resourceCount++;
+                }
+
+                // Generate SNS Topics (3 per VPC)
+                for (let i = 0; i < 3; i++) {
+                    resources.push(this.generateSNSTopic(region, i));
+                    this.resourceCount++;
+                }
+
+                // Generate WAF Web ACLs (1 per VPC)
+                resources.push(this.generateWAFWebACL(region, vpcIdx));
+                this.resourceCount++;
+
+                // Generate OpenSearch Domain (1 per VPC)
+                resources.push(this.generateOpenSearchDomain(region, vpcId, subnetIds, vpcIdx));
+                this.resourceCount++;
+
+                // Generate Step Functions (2 per VPC)
+                for (let i = 0; i < 2; i++) {
+                    resources.push(this.generateStepFunction(region, i));
+                    this.resourceCount++;
+                }
+
+                // Generate Neptune Cluster (1 per VPC)
+                resources.push(this.generateNeptuneCluster(region, vpcId, subnetIds, vpcIdx));
+                this.resourceCount++;
+
+                // Generate MSK Cluster (1 per VPC)
+                resources.push(this.generateMSKCluster(region, vpcId, subnetIds, vpcIdx));
+                this.resourceCount++;
+
+                // Generate Route53 Records (3 per VPC)
+                for (let i = 0; i < 3; i++) {
+                    resources.push(this.generateRoute53Record(region, vpcIdx, i));
+                    this.resourceCount++;
+                }
+
+                // Generate Glue Jobs (2 per VPC)
+                for (let i = 0; i < 2; i++) {
+                    resources.push(this.generateGlueJob(region, i));
+                    this.resourceCount++;
+                }
+
+                // Generate SageMaker Endpoints (1 per VPC)
+                resources.push(this.generateSageMakerEndpoint(region, vpcIdx));
+                this.resourceCount++;
+
+                // Generate Backup Vaults (1 per VPC)
+                resources.push(this.generateBackupVault(region, vpcIdx));
+                this.resourceCount++;
+
+                // Generate AppSync APIs (1 per VPC)
+                resources.push(this.generateAppSyncAPI(region, vpcIdx));
+                this.resourceCount++;
+
+                // Generate CodeBuild Projects (2 per VPC)
+                for (let i = 0; i < 2; i++) {
+                    resources.push(this.generateCodeBuildProject(region, i));
+                    this.resourceCount++;
+                }
+
+                // Generate IoT Rules (3 per VPC)
+                for (let i = 0; i < 3; i++) {
+                    resources.push(this.generateIoTRule(region, i));
+                    this.resourceCount++;
+                }
+
+                // Generate Redshift Cluster (1 per VPC)
+                resources.push(this.generateRedshiftCluster(region, vpcId, subnetIds, vpcIdx));
+                this.resourceCount++;
+
+                // Generate WorkSpaces (2 per VPC)
+                for (let i = 0; i < 2; i++) {
+                    resources.push(this.generateWorkspaces(region, vpcId, subnetIds, i));
+                    this.resourceCount++;
+                }
+
+                // Generate Service Catalog Products (2 per VPC)
+                for (let i = 0; i < 2; i++) {
+                    resources.push(this.generateServiceCatalogProduct(region, i));
+                    this.resourceCount++;
+                }
+
+                // Generate DataSync Tasks (2 per VPC)
+                for (let i = 0; i < 2; i++) {
+                    resources.push(this.generateDataSyncTask(region, i));
+                    this.resourceCount++;
+                }
+
+                // Generate FSx File Systems (1 per VPC)
+                resources.push(this.generateFSxFileSystem(region, vpcId, subnetIds, vpcIdx));
+                this.resourceCount++;
+
+                // Generate GameLift Fleets (1 per VPC)
+                resources.push(this.generateGameLiftFleet(region, vpcIdx));
+                this.resourceCount++;
+
+                // Generate MemoryDB Clusters (1 per VPC)
+                resources.push(this.generateMemoryDBCluster(region, vpcId, subnetIds, vpcIdx));
+                this.resourceCount++;
+
+                // Generate MWAA Environments (1 per VPC)
+                resources.push(this.generateMWAAEnvironment(region, vpcId, subnetIds, vpcIdx));
+                this.resourceCount++;
+
+                // Generate Transfer Servers (1 per VPC)
+                resources.push(this.generateTransferServer(region, vpcId, subnetIds, vpcIdx));
+                this.resourceCount++;
+
+                // Generate X-Ray Groups (2 per VPC)
+                for (let i = 0; i < 2; i++) {
+                    resources.push(this.generateXRayGroup(region, i));
+                    this.resourceCount++;
+                }
+
+                // Generate AppRunner Services (1 per VPC)
+                resources.push(this.generateAppRunner(region, vpcIdx));
+                this.resourceCount++;
+
+                // Generate EMR Serverless Applications (1 per VPC)
+                resources.push(this.generateEMRServerless(region, vpcIdx));
+                this.resourceCount++;
+
+                // Generate Batch Compute Environments (2 per VPC)
+                for (let i = 0; i < 2; i++) {
+                    resources.push(this.generateBatchComputeEnvironment(region, vpcId, subnetIds, i));
+                    this.resourceCount++;
+                }
+
+                // Generate DocumentDB Clusters (1 per VPC)
+                resources.push(this.generateDocumentDBCluster(region, vpcId, subnetIds, vpcIdx));
+                this.resourceCount++;
+
+                // Generate Kendra Indexes (1 per VPC)
+                resources.push(this.generateKendraIndex(region, vpcIdx));
+                this.resourceCount++;
+
+                // Generate MediaPackage Channels (2 per VPC)
+                for (let i = 0; i < 2; i++) {
+                    resources.push(this.generateMediaPackageChannel(region, i));
+                    this.resourceCount++;
+                }
+
+                // Generate Elastic Transcoder Pipelines (1 per VPC)
+                resources.push(this.generateElasticTranscoderPipeline(region, vpcIdx));
+                this.resourceCount++;
+
+                // Generate QuickSight Analyses (2 per VPC)
+                for (let i = 0; i < 2; i++) {
+                    resources.push(this.generateQuickSightAnalysis(region, i));
+                    this.resourceCount++;
+                }
+
+                // Generate Amplify Apps (1 per VPC)
+                resources.push(this.generateAmplifyApp(region, vpcIdx));
+                this.resourceCount++;
+
+                // Generate ACM Certificates (2 per VPC)
+                for (let i = 0; i < 2; i++) {
+                    resources.push(this.generateACMCertificate(region, i));
+                    this.resourceCount++;
+                }
+
+                // Generate Directory Service (1 per VPC)
+                resources.push(this.generateDirectoryService(region, vpcId, subnetIds, vpcIdx));
+                this.resourceCount++;
+
+                // Generate Global Accelerator (1 per VPC)
+                resources.push(this.generateGlobalAccelerator(region, vpcIdx));
+                this.resourceCount++;
+
+                // Generate QLDB Ledger (1 per VPC)
+                resources.push(this.generateQLDBLedger(region, vpcIdx));
+                this.resourceCount++;
+
+                // Generate VPC Lattice Service Network (1 per VPC)
+                resources.push(this.generateVPCLatticeServiceNetwork(region, vpcIdx));
+                this.resourceCount++;
+
+                // Generate Private CA (1 per VPC)
+                resources.push(this.generatePrivateCA(region, vpcIdx));
+                this.resourceCount++;
+
+                // Generate Systems Manager Documents (2 per VPC)
+                for (let i = 0; i < 2; i++) {
+                    resources.push(this.generateSystemsManagerDocument(region, i));
+                    this.resourceCount++;
+                }
+
+                // Generate Athena Workgroups (2 per VPC)
+                for (let i = 0; i < 2; i++) {
+                    resources.push(this.generateAthenaWorkgroup(region, i));
+                    this.resourceCount++;
+                }
+
+                // Generate TimeStream Databases (1 per VPC)
+                resources.push(this.generateTimeStreamDatabase(region, vpcIdx));
+                this.resourceCount++;
+
+                // Generate Managed Grafana Workspace (1 per VPC)
+                resources.push(this.generateManagedGrafana(region, vpcIdx));
+                this.resourceCount++;
+
+                // Generate Comprehend Endpoints (2 per VPC)
+                for (let i = 0; i < 2; i++) {
+                    resources.push(this.generateComprehendEndpoint(region, i));
+                    this.resourceCount++;
+                }
+
+                // Generate Rekognition Collections (2 per VPC)
+                for (let i = 0; i < 2; i++) {
+                    resources.push(this.generateRekognitionCollection(region, i));
+                    this.resourceCount++;
+                }
+
+                // Generate Lex Bots (1 per VPC)
+                resources.push(this.generateLexBot(region, vpcIdx));
+                this.resourceCount++;
+
+                // Generate Forecast Datasets (2 per VPC)
+                for (let i = 0; i < 2; i++) {
+                    resources.push(this.generateForecastDataset(region, i));
+                    this.resourceCount++;
+                }
+
+                // Generate Fraud Detector Models (2 per VPC)
+                for (let i = 0; i < 2; i++) {
+                    resources.push(this.generateFraudDetectorModel(region, i));
+                    this.resourceCount++;
+                }
+
+                // Generate HealthLake Datastores (1 per VPC)
+                resources.push(this.generateHealthLakeDatastore(region, vpcIdx));
+                this.resourceCount++;
+
+                // Generate Lookout Metrics Detectors (2 per VPC)
+                for (let i = 0; i < 2; i++) {
+                    resources.push(this.generateLookoutMetricsDetector(region, i));
+                    this.resourceCount++;
+                }
+
+                // Generate Connect Instances (1 per VPC)
+                resources.push(this.generateConnectInstance(region, vpcIdx));
+                this.resourceCount++;
+
+                // Generate GuardDuty Detectors (1 per VPC)
+                resources.push(this.generateGuardDutyDetector(region, vpcIdx));
+                this.resourceCount++;
+
+                // Generate Macie Severities (1 per VPC)
+                for (let i = 0; i < 1; i++) {
+                    resources.push(this.generateMacieSeverity(region, i));
+                    this.resourceCount++;
+                }
+
+                // Generate Security Hub Standards (1 per VPC)
+                for (let i = 0; i < 1; i++) {
+                    resources.push(this.generateSecurityHubStandard(region, i));
+                    this.resourceCount++;
+                }
+
+                // Generate Network Firewall (1 per VPC)
+                resources.push(this.generateNetworkFirewall(region, vpcIdx));
+                this.resourceCount++;
+
+                // Generate Shield Protection (1 per VPC)
+                resources.push(this.generateShieldProtection(region, vpcIdx));
+                this.resourceCount++;
+
+                // Generate WAF IP Sets (2 per VPC)
+                for (let i = 0; i < 2; i++) {
+                    resources.push(this.generateWAFIPSet(region, i));
+                    this.resourceCount++;
+                }
+
+                // Generate MediaLive Channels (2 per VPC)
+                for (let i = 0; i < 2; i++) {
+                    resources.push(this.generateMediaLiveChannel(region, i));
+                    this.resourceCount++;
+                }
+
+                // Generate IoT Things (3 per VPC)
+                for (let i = 0; i < 3; i++) {
+                    resources.push(this.generateIoTThing(region, i));
+                    this.resourceCount++;
+                }
+
+                // Generate RAM Resource Shares (2 per VPC)
+                for (let i = 0; i < 2; i++) {
+                    resources.push(this.generateRAMResourceShare(region, i));
+                    this.resourceCount++;
+                }
+
+                // Generate Service Catalog Tag Options (3 per VPC)
+                for (let i = 0; i < 3; i++) {
+                    resources.push(this.generateServiceCatalogTagOption(region, i));
+                    this.resourceCount++;
+                }
+
+                // Generate Inspector Assessments (2 per VPC)
+                for (let i = 0; i < 2; i++) {
+                    resources.push(this.generateInspectorAssessment(region, i));
+                    this.resourceCount++;
+                }
+
+                // Generate License Configurations (1 per VPC)
+                resources.push(this.generateLicenseConfiguration(region, vpcIdx));
+                this.resourceCount++;
+
+                // Generate Proton Environments (1 per VPC)
+                resources.push(this.generateProtonEnvironment(region, vpcIdx));
+                this.resourceCount++;
+
+                // Generate Bedrock Models (2 per VPC)
+                for (let i = 0; i < 2; i++) {
+                    resources.push(this.generateBedrockModel(region, i));
+                    this.resourceCount++;
+                }
+
+                // Generate Textract Analysis (2 per VPC)
+                for (let i = 0; i < 2; i++) {
+                    resources.push(this.generateTextractAnalysis(region, i));
+                    this.resourceCount++;
+                }
+
+                // Generate Polly Lexicons (1 per VPC)
+                resources.push(this.generatePollyLexicon(region, vpcIdx));
+                this.resourceCount++;
+
+                // Generate Transcribe Vocabularies (2 per VPC)
+                for (let i = 0; i < 2; i++) {
+                    resources.push(this.generateTranscribeVocabulary(region, i));
+                    this.resourceCount++;
+                }
+
+                // Generate OpenSearch Serverless Collections (2 per VPC)
+                for (let i = 0; i < 2; i++) {
+                    resources.push(this.generateOpenSearchServerlessCollection(region, i));
+                    this.resourceCount++;
+                }
+
+                // Generate Redshift Serverless Workgroups (2 per VPC)
+                for (let i = 0; i < 2; i++) {
+                    resources.push(this.generateRedshiftServerlessWorkgroup(region, i));
+                    this.resourceCount++;
+                }
+
+                // Generate Lake Formation Resources (2 per VPC)
+                for (let i = 0; i < 2; i++) {
+                    resources.push(this.generateLakeFormation(region, i));
+                    this.resourceCount++;
+                }
+
+                // Generate Glue DataBrew Jobs (2 per VPC)
+                for (let i = 0; i < 2; i++) {
+                    resources.push(this.generateGlueDataBrew(region, i));
+                    this.resourceCount++;
+                }
+
+                // Generate Clean Rooms (1 per VPC)
+                resources.push(this.generateCleanRoom(region, vpcIdx));
+                this.resourceCount++;
+
+                // Add progress indicator
+                if (vpcIdx % 5 === 0) {
+                    console.log(`  Progress: ${vpcIdx}/${this.vpcCountPerRegion} VPCs`);
+                }
+            }
+        }
+
+        return {
+            version: 4,
+            terraform_version: "1.5.7",
+            serial: 1,
+            lineage: crypto.randomBytes(16).toString('hex'),
+            outputs: {},
+            resources
+        };
+    }
+
+    generateAndSave (outputFile) {
+        console.log("Generating AWS infrastructure state file...");
+        const state = this.generateStateFile();
+
+        console.log(`Generated ${this.resourceCount} resources across ${this.regions.length} regions`);
+
+        console.log(`Saving to ${outputFile}...`);
+        const jsonContent = JSON.stringify(state, null, 2);
+
+        // Save compressed file
+        zlib.gzip(jsonContent, (err, compressed) => {
+            if (err) {
+                console.error("Error compressing file:", err);
+                return;
+            }
+
+            fs.writeFile(outputFile, compressed, (err) => {
+                if (err) {
+                    console.error("Error saving file:", err);
+                    return;
+                }
+                console.log(`State file has been saved to ${outputFile}`);
+                console.log(`Total resources generated: ${this.resourceCount}`);
+            });
+        });
+    }
+}
+
+// Run the generator
+const generator = new AWSStateGenerator();
+generator.generateAndSave('aws_infrastructure.tfstate.gz');
